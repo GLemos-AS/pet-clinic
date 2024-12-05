@@ -1,1 +1,1 @@
-# spring-clinic
+# pet-clinic
