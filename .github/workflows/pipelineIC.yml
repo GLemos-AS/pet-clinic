@@ -52,12 +52,13 @@ jobs:
           curl -f -X POST -u '${{ secrets.SONAR_TOKEN }}:' 'https://sonarcloud.io/api/projects/create' -d 'name=${{ github.event.repository.name }}' -d 'project=${{ github.event.repository.name }}' -d 'organization=devsecopsusach' -d 'visibility=public'
           if [ $? -ne 0 ]; then
             echo "Proyecto ya existe en Sonarcloud"
-            echo "::set-output name=proyectoExiste::1"
+            echo "project_created=false" >> $GITHUB_ENV
           else
             echo "Proyecto ${{ github.event.repository.name }} creado exitosamente en Sonarcloud"
             
             echo "Se establece rama main como rama por defecto"
             curl -X POST -u '${{ secrets.SONAR_TOKEN }}:' 'https://sonarcloud.io/api/project_branches/rename' -d 'name=main' -d 'project=${{ github.event.repository.name }}'
+            echo "project_created=true" >> $GITHUB_ENV
           fi
           set -e
       
