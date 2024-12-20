@@ -222,6 +222,7 @@ jobs:
 
     - name: Docker Build
       run: |
+        ls -R
         docker build --tag b4b4y4g4x/cursodevsecops-test:latest .
 
     - name: Push Docker
