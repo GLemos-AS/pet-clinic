@@ -219,3 +219,11 @@ jobs:
       with:
         name: JAR
         path: ${{github.workspace}}
+
+    - name: Docker Build
+      run: |
+        docker build --tag b4b4y4g4x/cursodevsecops-test:latest .
+
+    - name: Push Docker
+      run: |
+        docker push b4b4y4g4x/cursodevsecops-test:latest
