@@ -43,16 +43,19 @@ jobs:
           ORGANIZATION: glemos-as
         run: |
           echo "Verificando si el proyecto $REPO_NAME existe en SonarCloud..."
-          response=$(curl -s -w "%{http_code}" -o response.json -u "$SONAR_TOKEN:" \
-            "https://sonarcloud.io/api/projects/search?organization=$ORGANIZATION&project=$REPO_NAME")
 
-          if echo "$response" | grep -q '"project"'; then
+          # Consultar la existencia del proyecto en SonarCloud
+          response=$(curl -s -w "%{http_code}" -o response.json -u "$SONAR_TOKEN:" \
+            "https://sonarcloud.io/api/projects/search?organization=$ORGANIZATION&projects=$REPO_NAME")
+
+          if [ "$(echo "$response" | jq -r '.components | length')" -gt 0 ]; then
             echo "El proyecto ya existe en SonarCloud."
             echo "project_created=false" >> $GITHUB_ENV
           else
             echo "El proyecto no existe o hubo un error al verificar. Respuesta de la API:"
             cat response.json
 
+            # Intentar crear el proyecto
             echo "Intentando crear el proyecto $REPO_NAME en SonarCloud..."
             create_response=$(curl -s -w "%{http_code}" -o create_response.json -X POST -u "$SONAR_TOKEN:" \
               "https://sonarcloud.io/api/projects/create" \
@@ -61,6 +64,7 @@ jobs:
               -d "organization=$ORGANIZATION" \
               -d "visibility=public")
 
+            # Verificar si la creación fue exitosa
             if [ "$create_response" -ne 201 ]; then
               echo "Error al crear el proyecto. Respuesta de la API:"
               cat create_response.json
@@ -69,12 +73,14 @@ jobs:
               echo "Proyecto creado exitosamente en SonarCloud."
             fi
 
+            # Establecer la rama 'main' como predeterminada
             echo "Estableciendo la rama main como predeterminada..."
             branch_response=$(curl -s -w "%{http_code}" -o branch_response.json -X POST -u "$SONAR_TOKEN:" \
               "https://sonarcloud.io/api/project_branches/rename" \
               -d "name=main" \
               -d "project=$REPO_NAME")
 
+            # Verificar si se estableció la rama correctamente
             if [ "$branch_response" -ne 200 ]; then
               echo "Error al establecer la rama predeterminada. Respuesta de la API:"
               cat branch_response.json
