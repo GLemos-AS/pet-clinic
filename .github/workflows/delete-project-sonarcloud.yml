@@ -1,0 +1,45 @@
+name: Delete Project in SonarCloud
+on:
+  workflow_dispatch: # Permite ejecutar el workflow manualmente desde GitHub Actions
+jobs:
+  delete-project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+      - name: Verify if the project exists in SonarCloud
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          REPO_NAME: pet-clinic
+          ORGANIZATION: glemos-as
+        run: |
+          echo "Checking if the project $REPO_NAME exists in SonarCloud..."
+          response=$(curl -s -w "%{http_code}" -o response.json -u "$SONAR_TOKEN:" \
+            "https://sonarcloud.io/api/projects/search?organization=$ORGANIZATION&project=$REPO_NAME")
+
+          if echo "$response" | grep -q '"key"'; then
+            echo "Project found. Proceeding to delete..."
+          else
+            echo "Project not found or an error occurred while verifying. API Response:"
+            cat response.json
+            exit 1
+          fi
+      - name: Delete the project in SonarCloud
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          REPO_NAME: pet-clinic
+          ORGANIZATION: glemos-as
+        run: |
+          echo "Deleting the project $REPO_NAME in SonarCloud..."
+          delete_response=$(curl -s -w "%{http_code}" -o delete_response.json -X POST -u "$SONAR_TOKEN:" \
+            "https://sonarcloud.io/api/projects/delete" \
+            -d "organization=$ORGANIZATION" \
+            -d "project=$REPO_NAME")
+
+          if [ "$(cat delete_response.json | grep -c 'errors')" -ne 0 ]; then
+            echo "Error while deleting the project. API Response:"
+            cat delete_response.json
+            exit 1
+          else
+            echo "Project successfully deleted from SonarCloud."
+          fi
