@@ -11,16 +11,23 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           REPO_NAME: pet-clinic
-          ORGANIZATION: glemos-as
+          ORGANIZATION: glemosas
         run: |
           echo "Checking if the project $REPO_NAME exists in SonarCloud..."
           response=$(curl -s -w "%{http_code}" -o response.json -u "$SONAR_TOKEN:" \
             "https://sonarcloud.io/api/projects/search?organization=$ORGANIZATION&project=$REPO_NAME")
 
-          if echo "$response" | grep -q '"key"'; then
-            echo "Project found. Proceeding to delete..."
+          http_code=$(echo "$response" | tail -n1)
+          if [ "$http_code" -eq 200 ]; then
+            project_exists=$(cat response.json | jq '.components | length')
+            if [ "$project_exists" -gt 0 ]; then
+              echo "Project found. Proceeding to delete..."
+            else
+              echo "Project not found. Exiting."
+              exit 1
+            fi
           else
-            echo "Project not found or an error occurred while verifying. API Response:"
+            echo "Error while checking project existence. HTTP Response Code: $http_code"
             cat response.json
             exit 1
           fi
@@ -28,7 +35,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           REPO_NAME: pet-clinic
-          ORGANIZATION: glemos-as
+          ORGANIZATION: glemosas
         run: |
           echo "Deleting the project $REPO_NAME in SonarCloud..."
           delete_response=$(curl -s -w "%{http_code}" -o delete_response.json -X POST -u "$SONAR_TOKEN:" \
@@ -36,10 +43,11 @@ jobs:
             -d "organization=$ORGANIZATION" \
             -d "project=$REPO_NAME")
 
-          if [ "$(cat delete_response.json | grep -c 'errors')" -ne 0 ]; then
-            echo "Error while deleting the project. API Response:"
+          http_code=$(echo "$delete_response" | tail -n1)
+          if [ "$http_code" -eq 200 ]; then
+            echo "Project successfully deleted from SonarCloud."
+          else
+            echo "Error while deleting the project. HTTP Response Code: $http_code"
             cat delete_response.json
             exit 1
-          else
-            echo "Project successfully deleted from SonarCloud."
           fi
