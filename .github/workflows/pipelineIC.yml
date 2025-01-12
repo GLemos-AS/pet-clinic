@@ -42,29 +42,16 @@ jobs:
       - name: Validando existencia de proyecto en SonarCloud
         id: validateProjectOnSonar
         run: |
-          # # Verificar si el proyecto ya existe en SonarCloud
-          # project_exists=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/projects/search?projects=${{ github.event.repository.name }}" | jq -r '.components[0].key')
-
-          # if [ -n "$project_exists" ]; then
-          #   echo "El proyecto ya existe en SonarCloud."
-          #   echo "project_created=true" >> $GITHUB_ENV
-          # else
-          echo "Creando el proyecto en SonarCloud..."
-          create_project_response=$(curl -s -o response.json -w "%{http_code}" -X POST -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/projects/create" -d "name=${{ github.event.repository.name }}" -d "project=${{ github.event.repository.name }}" -d "organization=glemosas" -d "visibility=public")
-            
-          http_code=$(echo "$create_project_response" | tail -n 1)
-          if [ "$http_code" -ne 200 ]; then
-            echo "Error al crear el proyecto. Código de respuesta: $http_code"
-            cat response.json
+          # echo "Siguiente"
+          curl -f -X POST -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/projects/create" -d "name=${{ github.event.repository.name }}" -d "project=${{ github.event.repository.name }}" -d "organization=glemosas" -d "visibility=public"
+          if [ $? -ne 0 ]; then
             echo "project_created=false" >> $GITHUB_ENV
-            exit 1
           else
-            echo "Proyecto ${{ github.event.repository.name }} creado exitosamente en SonarCloud."
+            echo "Proyecto ${{ github.event.repository.name }} creado exitosamente en Sonarcloud"
             echo "Se establece rama main como rama por defecto"
-            curl -s -X POST -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/project_branches/rename" -d "name=main" -d "project=${{ github.event.repository.name }}"
+            curl -X POST -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/project_branches/rename" -d "name=main" -d "project=${{ github.event.repository.name }}"
             echo "project_created=true" >> $GITHUB_ENV
           fi
-          # fi
 
 
       # - name: Enable execution gradlew
