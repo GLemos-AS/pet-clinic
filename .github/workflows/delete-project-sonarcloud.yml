@@ -15,7 +15,7 @@ jobs:
         run: |
           echo "Checking if the project $REPO_NAME exists in SonarCloud..."
           response=$(curl -s -w "%{http_code}" -o response.json -u "$SONAR_TOKEN:" \
-            "https://sonarcloud.io/api/projects/search?organizations=$ORGANIZATION&project=$REPO_NAME")
+            "https://sonarcloud.io/api/projects/search?organization=$ORGANIZATION&project=$REPO_NAME")
 
           if echo "$response" | grep -q '"key"'; then
             echo "Project found. Proceeding to delete..."
