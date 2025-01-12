@@ -19,7 +19,22 @@ jobs:
       - name: Validate and Configure build.gradle
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: "if [ -f \"build.gradle\" ]; then\n  echo \"Encontró el archivo\"\n  echo \"Verificando configuracion del plugin sonar\"\n  if ! grep -q  'id \"org.sonarqube\" version \"3.3\"' build.gradle; then\n    echo \"No se encuentra Plugin configurado\"\n    sed -i '/id '\\''java'\\''/a \\ \\ \\ \\ id '\\''org.sonarqube'\\'' version '\\''3.3'\\''' build.gradle\n    echo \"Plugin de Sonarcloud acaba de ser añadido a build.gradle\"\n    cat build.gradle\n  else \n    echo \"Plugin de sonarcloud ya está configurado en build.gradle\"\n  fi\n\n\nelse\n  echo \"no se encontró archivo build.gradle\"\n  exit 1\nfi\n"
+        run: |
+          if [ -f "build.gradle" ]; then
+            echo "Encontró el archivo"
+            echo "Verificando configuración del plugin sonar"
+            if ! grep -q 'id "org.sonarqube" version "3.3"' build.gradle; then
+              echo "No se encuentra Plugin configurado"
+              sed -i '/id '\''java'\''/a \ \ \ \ id '\''org.sonarqube'\'' version '\''3.3'\''' build.gradle
+              echo "Plugin de Sonarcloud acaba de ser añadido a build.gradle"
+              cat build.gradle
+            else
+              echo "Plugin de sonarcloud ya está configurado en build.gradle"
+            fi
+          else
+            echo "No se encontró archivo build.gradle"
+            exit 1
+          fi
       - name: Validate or Create SonarCloud Project
         id: validate-project
         env:
@@ -29,9 +44,12 @@ jobs:
         run: |
           echo "Verificando si el proyecto $REPO_NAME existe en SonarCloud..."
           response=$(curl -s -w "%{http_code}" -o response.json -u "$SONAR_TOKEN:" \
-            "https://sonarcloud.io/api/projects/search?organization=$ORGANIZATION&projects=$REPO_NAME")
+            "https://sonarcloud.io/api/projects/search?organization=$ORGANIZATION&project=$REPO_NAME")
 
-          if [ "$response" -ne 200 ]; then
+          if echo "$response" | grep -q '"project"'; then
+            echo "El proyecto ya existe en SonarCloud."
+            echo "project_created=false" >> $GITHUB_ENV
+          else
             echo "El proyecto no existe o hubo un error al verificar. Respuesta de la API:"
             cat response.json
 
@@ -64,13 +82,10 @@ jobs:
             fi
 
             echo "project_created=true" >> $GITHUB_ENV
-          else
-            echo "El proyecto ya existe en SonarCloud."
-            echo "project_created=false" >> $GITHUB_ENV
           fi
-      - name: Enable execution gradlew
+      - name: Enable execution of gradlew
         run: |
-          chmod 777 gradlew
+          chmod 755 gradlew
       - name: Perform Initial Analysis (if Project Created)
         if: env.project_created == 'true'
         env:
@@ -80,7 +95,7 @@ jobs:
           echo "Realizando análisis inicial en la rama main..."
           ./gradlew sonarqube \
             -Dsonar.projectKey=$REPO_NAME \
-            -Dsonar.organization=glemos-as \
+            -Dsonar.organization=$ORGANIZATION \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.token=$SONAR_TOKEN \
             -Dsonar.branch.name=main
@@ -94,7 +109,7 @@ jobs:
           echo "Realizando análisis en la rama actual: $BRANCH_NAME..."
           ./gradlew sonarqube \
             -Dsonar.projectKey=$REPO_NAME \
-            -Dsonar.organization=glemos-as \
+            -Dsonar.organization=$ORGANIZATION \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.token=$SONAR_TOKEN \
             -Dsonar.branch.name=${{ github.ref_name }}
@@ -106,6 +121,11 @@ jobs:
           echo "Validando el estado del Quality Gate..."
           analysisId=$(curl -s -u "$SONAR_TOKEN:" \
             "https://sonarcloud.io/api/ce/component?component=$REPO_NAME" | jq -r '.current.analysisId')
+
+          if [ -z "$analysisId" ]; then
+            echo "No se encontró un análisis reciente. Verifique la configuración."
+            exit 1
+          fi
 
           qualityGateStatus=$(curl -s -u "$SONAR_TOKEN:" \
             "https://sonarcloud.io/api/qualitygates/project_status?analysisId=$analysisId" | jq -r '.projectStatus.status')
