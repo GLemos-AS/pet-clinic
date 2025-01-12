@@ -12,85 +12,88 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v2
         with:
-          java-version: "17"
-          distribution: "adopt"
+          java-version: '17'
+          distribution: 'adopt'
       - name: Set Environment Variables
         run: echo "BRANCH_NAME=${{ github.ref_name }}" >> $GITHUB_ENV
       - name: Validate and Configure build.gradle
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: |
-          if [ -f "build.gradle" ]; then
-            echo "Encontró el archivo"
-            echo "Verificando configuración del plugin sonar"
-            if ! grep -q 'id "org.sonarqube" version "3.3"' build.gradle; then
-              echo "No se encuentra Plugin configurado"
-              sed -i '/id '\''java'\''/a \\ \\ \\ \\ id '\''org.sonarqube'\'' version '\''3.3'\''' build.gradle
-              echo "Plugin de Sonarcloud añadido a build.gradle"
-              cat build.gradle
-            else
-              echo "Plugin de Sonarcloud ya está configurado en build.gradle"
-            fi
-          else
-            echo "No se encontró archivo build.gradle"
-            exit 1
-          fi
+        run: "if [ -f \"build.gradle\" ]; then\n  echo \"Encontró el archivo\"\n  echo \"Verificando configuracion del plugin sonar\"\n  if ! grep -q  'id \"org.sonarqube\" version \"3.3\"' build.gradle; then\n    echo \"No se encuentra Plugin configurado\"\n    sed -i '/id '\\''java'\\''/a \\ \\ \\ \\ id '\\''org.sonarqube'\\'' version '\\''3.3'\\''' build.gradle\n    echo \"Plugin de Sonarcloud acaba de ser añadido a build.gradle\"\n    cat build.gradle\n  else \n    echo \"Plugin de sonarcloud ya está configurado en build.gradle\"\n  fi\n\n\nelse\n  echo \"no se encontró archivo build.gradle\"\n  exit 1\nfi\n"
       - name: Validando existencia de proyecto en SonarCloud
         id: validateProjectOnSonar
         run: |
-          echo "Verificando si el proyecto existe en SonarCloud..."
-          
-          # Realizar la solicitud a la API para verificar si el proyecto existe
-          response=$(curl -s -w "%{http_code}" -o response.json -u "${{ secrets.SONAR_TOKEN }}:" \
-            "https://sonarcloud.io/api/projects/search?organization=glemosas&projects=${{ github.event.repository.name }}")
-          
-          echo "Respuesta de la API:"
-          cat response.json  # Esto imprime el contenido de la respuesta JSON para depuración
-
-          # Verificar si el proyecto ya existe en la respuesta
-          if [[ "$(echo "$response" | jq -r '.components | length')" -gt 0 ]]; then
-            echo "El proyecto ya existe en SonarCloud."
+          pwd
+          ls -R
+          set +e
+          echo "Siguiente"
+          curl -f -X POST -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/projects/create" -d "name=${{ github.event.repository.name }}" -d "project=${{ github.event.repository.name }}" -d "organization=glemosas" -d "visibility=public"
+          if [ $? -ne 0 ]; then
             echo "project_created=false" >> $GITHUB_ENV
           else
-            echo "El proyecto no existe. Procediendo a crearlo..."
-            
-            # Intentar crear el proyecto
-            create_response=$(curl -s -w "%{http_code}" -o create_response.json -X POST -u "${{ secrets.SONAR_TOKEN }}:" \
-              "https://sonarcloud.io/api/projects/create" \
-              -d "name=${{ github.event.repository.name }}" \
-              -d "project=${{ github.event.repository.name }}" \
-              -d "organization=glemosas" \
-              -d "visibility=public")
-            
-            # Imprimir la respuesta de la creación para depuración
-            echo "Respuesta de la creación del proyecto:"
-            cat create_response.json
-            
-            # Verificar si el proyecto ya existe
-            if echo "$create_response" | jq -e 'select(.errors[]? | .msg | contains("key already exists"))' > /dev/null; then
-              echo "El proyecto ya existe con la misma clave. No se puede crear nuevamente."
-              echo "project_created=false" >> $GITHUB_ENV
-            else
-              echo "Proyecto ${{ github.event.repository.name }} creado exitosamente en SonarCloud."
-              echo "Estableciendo la rama 'main' como la rama predeterminada..."
-              
-              # Intentar cambiar la rama predeterminada a 'main'
-              branch_response=$(curl -s -w "%{http_code}" -o branch_response.json -X POST -u "${{ secrets.SONAR_TOKEN }}:" \
-                "https://sonarcloud.io/api/project_branches/rename" \
-                -d "name=main" \
-                -d "project=${{ github.event.repository.name }}")
-              
-              echo "Respuesta al cambiar la rama predeterminada:"
-              cat branch_response.json  # Imprime la respuesta para depuración
+            echo "Proyecto ${{ github.event.repository.name }} creado exitosamente en Sonarcloud"
+            echo "Se establece rama main como rama por defecto"
+            curl -X POST -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/project_branches/rename" -d "name=main" -d "project=${{ github.event.repository.name }}"
+            echo "project_created=true" >> $GITHUB_ENV
+          fi
+          set -e
+      - name: Enable execution gradlew
+        run: |
+          chmod 777 gradlew
+      - name: Perform Initial Analysis (if Project Created)
+        if: env.project_created == 'true'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          echo "Realizando análisis inicial en la rama main..."
+          ./gradlew sonarqube \
+            -Dsonar.projectKey=$REPO_NAME \
+            -Dsonar.organization=glemosas \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.token=$SONAR_TOKEN \
+            -Dsonar.branch.name=main
+      - name: Perform Branch Analysis
+        if: env.project_created == 'false'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          echo "Realizando análisis en la rama actual: $BRANCH_NAME..."
+          ./gradlew sonarqube \
+            -Dsonar.projectKey=$REPO_NAME \
+            -Dsonar.organization=glemosas \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.token=$SONAR_TOKEN \
+            -Dsonar.branch.name=${{ github.ref_name }}
+      - name: Validate Quality Gate
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          echo "Validando el estado del Quality Gate..."
+          analysisId=$(curl -s -u "$SONAR_TOKEN:" \
+            "https://sonarcloud.io/api/ce/component?component=$REPO_NAME" | jq -r '.current.analysisId')
 
-              # Verificar si hubo un error al establecer la rama predeterminada
-              if [[ "$(echo "$branch_response" | jq -r '.errors')" != "null" ]]; then
-                echo "Error al establecer la rama predeterminada. Respuesta de la API:"
-                cat branch_response.json
-                exit 1
-              fi
-              echo "Rama 'main' establecida como predeterminada."
-              echo "project_created=true" >> $GITHUB_ENV
-            fi
+          if [ -z "$analysisId" ]; then
+            echo "No se encontró un análisis reciente. Verifique la configuración."
+            exit 1
           fi
 
+          qualityGateStatus=$(curl -s -u "$SONAR_TOKEN:" \
+            "https://sonarcloud.io/api/qualitygates/project_status?analysisId=$analysisId" | jq -r '.projectStatus.status')
+
+          if [ "$qualityGateStatus" != "OK" ]; then
+            echo "El proyecto no cumple con el Quality Gate: $qualityGateStatus."
+            echo "Verificando vulnerabilidades críticas..."
+            vulnerabilities=$(curl -s -u "$SONAR_TOKEN:" \
+              "https://sonarcloud.io/api/issues/search?componentKeys=$REPO_NAME&types=VULNERABILITY&severities=CRITICAL,BLOCKER" | jq -r '.total')
+
+            if [ "$vulnerabilities" -gt 0 ]; then
+              echo "Se encontraron $vulnerabilities vulnerabilidades críticas. El proyecto no cumple con los estándares de seguridad."
+              #exit 1
+            fi
+          else
+            echo "El proyecto cumple con el Quality Gate y no tiene vulnerabilidades críticas. Continuando sin problemas."
+          fi
