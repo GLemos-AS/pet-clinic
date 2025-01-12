@@ -42,7 +42,7 @@ jobs:
       - name: Validando existencia de proyecto en SonarCloud
         id: validateProjectOnSonar
         run: |
-          # Verificar si el proyecto ya existe
+          # Verificar si el proyecto ya existe en SonarCloud
           project_exists=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/projects/search?projects=${{ github.event.repository.name }}" | jq -r '.components[0].key')
 
           if [ -n "$project_exists" ]; then
@@ -52,7 +52,7 @@ jobs:
             echo "Creando el proyecto en SonarCloud..."
             create_project_response=$(curl -s -o response.json -w "%{http_code}" -X POST -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/projects/create" -d "name=${{ github.event.repository.name }}" -d "project=${{ github.event.repository.name }}" -d "organization=glemosas" -d "visibility=public")
             
-            http_code=$(jq -r '.http_code' <<< "$create_project_response")
+            http_code=$(echo "$create_project_response" | tail -n 1)
             if [ "$http_code" -ne 200 ]; then
               echo "Error al crear el proyecto. Código de respuesta: $http_code"
               cat response.json
