@@ -43,7 +43,7 @@ jobs:
         id: validateProjectOnSonar
         run: |
           # echo "Siguiente"
-          curl -f -X POST -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/projects/create" -d "name=${{ github.event.repository.name }}" -d "project=${{ github.event.repository.name }}" -d "organization=glemosas" -d "visibility=public"
+          curl -v -f -X POST -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/projects/create" -d "name=pet-clinic" -d "project=pet-clinic" -d "organization=glemosas" -d "visibility=public"
           if [ $? -ne 0 ]; then
             echo "project_created=false" >> $GITHUB_ENV
           else
