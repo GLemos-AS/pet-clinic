@@ -20,62 +20,45 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: "if [ -f \"build.gradle\" ]; then\n  echo \"Encontró el archivo\"\n  echo \"Verificando configuracion del plugin sonar\"\n  if ! grep -q  'id \"org.sonarqube\" version \"3.3\"' build.gradle; then\n    echo \"No se encuentra Plugin configurado\"\n    sed -i '/id '\\''java'\\''/a \\ \\ \\ \\ id '\\''org.sonarqube'\\'' version '\\''3.3'\\''' build.gradle\n    echo \"Plugin de Sonarcloud acaba de ser añadido a build.gradle\"\n    cat build.gradle\n  else \n    echo \"Plugin de sonarcloud ya está configurado en build.gradle\"\n  fi\n\n\nelse\n  echo \"no se encontró archivo build.gradle\"\n  exit 1\nfi\n"
-      #   id: validateProjectOnSonar
-      #   run: |
-      #     #pwd
-      #     #ls -R
-      #     set +e
-      #     echo "Siguiente"
-      #     #curl -f -X POST -u '${{ secrets.SONAR_TOKEN }}:' 'https://sonarcloud.io/api/projects/create' -d 'name=${{ github.event.repository.name }}' -d 'project=${{ github.event.repository.name }}' -d 'organization=glemos-as' -d 'visibility=public'
-      #     #if [ $? -ne 0 ]; then
-      #     #  echo "Proyecto ya existe en Sonarcloud"
-      #     #  echo "project_created=false" >> $GITHUB_ENV
-      #     #else
-      #     #  echo "Proyecto ${{ github.event.repository.name }} creado exitosamente en Sonarcloud"
-      #     #  
-      #     #  echo "Se establece rama main como rama por defecto"
-      #     #  curl -X POST -u '${{ secrets.SONAR_TOKEN }}:' 'https://sonarcloud.io/api/project_branches/rename' -d 'name=main' -d 'project=${{ github.event.repository.name }}'
-      #     #  echo "project_created=true" >> $GITHUB_ENV
-      #     #fi
-      #     #set -e
       - name: Validate or Create SonarCloud Project
-        # - name: Validando existencia de proyecto en SonarCloud
-
         id: validate-project
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           REPO_NAME: ${{ github.event.repository.name }}
         run: |
           echo "Verificando si el proyecto $REPO_NAME existe en SonarCloud..."
-          response=$(curl -s -o /dev/null -w "%{http_code}" -u "$SONAR_TOKEN:" \
+          response=$(curl -s -w "%{http_code}" -o response.json -u "$SONAR_TOKEN:" \
             "https://sonarcloud.io/api/projects/search?projects=$REPO_NAME")
 
           if [ "$response" -ne 200 ]; then
-            echo "El proyecto no existe. Creándolo en SonarCloud..."
-            create_response=$(curl -s -w "%{http_code}" -o /dev/null -X POST -u "$SONAR_TOKEN:" \
+            echo "El proyecto no existe o hubo un error al verificar. Respuesta de la API:"
+            cat response.json
+
+            echo "Creando el proyecto $REPO_NAME en SonarCloud..."
+            create_response=$(curl -s -w "%{http_code}" -o create_response.json -X POST -u "$SONAR_TOKEN:" \
               "https://sonarcloud.io/api/projects/create" \
               -d "name=$REPO_NAME" \
               -d "project=$REPO_NAME" \
               -d "organization=glemos-as" \
               -d "visibility=public")
 
-            if [ "$create_response" -eq 201 ]; then
-              echo "Proyecto creado exitosamente (HTTP $create_response)."
-            else
-              echo "Error al crear el proyecto (HTTP $create_response)."
+            if [ "$create_response" -ne 201 ]; then
+              echo "Error al crear el proyecto. Respuesta de la API:"
+              cat create_response.json
               exit 1
+            else
+              echo "Proyecto creado exitosamente en SonarCloud."
             fi
 
             echo "Estableciendo la rama main como predeterminada..."
-            branch_response=$(curl -s -w "%{http_code}" -o /dev/null -X POST -u "$SONAR_TOKEN:" \
+            branch_response=$(curl -s -w "%{http_code}" -o branch_response.json -X POST -u "$SONAR_TOKEN:" \
               "https://sonarcloud.io/api/project_branches/rename" \
               -d "name=main" \
               -d "project=$REPO_NAME")
 
-            if [ "$branch_response" -eq 200 ]; then
-              echo "Rama main establecida como predeterminada (HTTP $branch_response)."
-            else
-              echo "Error al establecer la rama main (HTTP $branch_response)."
+            if [ "$branch_response" -ne 200 ]; then
+              echo "Error al establecer la rama predeterminada. Respuesta de la API:"
+              cat branch_response.json
               exit 1
             fi
 
