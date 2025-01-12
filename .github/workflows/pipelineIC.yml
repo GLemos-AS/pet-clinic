@@ -22,7 +22,21 @@ jobs:
         run: "if [ -f \"build.gradle\" ]; then\n  echo \"Encontró el archivo\"\n  echo \"Verificando configuracion del plugin sonar\"\n  if ! grep -q  'id \"org.sonarqube\" version \"3.3\"' build.gradle; then\n    echo \"No se encuentra Plugin configurado\"\n    sed -i '/id '\\''java'\\''/a \\ \\ \\ \\ id '\\''org.sonarqube'\\'' version '\\''3.3'\\''' build.gradle\n    echo \"Plugin de Sonarcloud acaba de ser añadido a build.gradle\"\n    cat build.gradle\n  else \n    echo \"Plugin de sonarcloud ya está configurado en build.gradle\"\n  fi\n\n\nelse\n  echo \"no se encontró archivo build.gradle\"\n  exit 1\nfi\n"
       - name: Validando existencia de proyecto en SonarCloud
         id: validateProjectOnSonar
-        run: "#pwd\n#ls -R\nset +e\necho \"Siguiente\"\n#curl -f -X POST -u '${{ secrets.SONAR_TOKEN }}:' 'https://sonarcloud.io/api/projects/create' -d 'name=${{ github.event.repository.name }}' -d 'project=${{ github.event.repository.name }}' -d 'organization=devsecopsusach' -d 'visibility=public'\n#if [ $? -ne 0 ]; then\n#  echo \"Proyecto ya existe en Sonarcloud\"\n#  echo \"project_created=false\" >> $GITHUB_ENV\n#else\n#  echo \"Proyecto ${{ github.event.repository.name }} creado exitosamente en Sonarcloud\"\n#  \n#  echo \"Se establece rama main como rama por defecto\"\n#  curl -X POST -u '${{ secrets.SONAR_TOKEN }}:' 'https://sonarcloud.io/api/project_branches/rename' -d 'name=main' -d 'project=${{ github.event.repository.name }}'\n#  echo \"project_created=true\" >> $GITHUB_ENV\n#fi\n#set -e\n"
+        run: |
+          # pwd
+          # ls -R
+          # set +e
+          echo "Siguiente"
+          curl -f -X POST -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/projects/create" -d "name=${{ github.event.repository.name }}" -d "project=${{ github.event.repository.name }}" -d "organization=glemosas" -d "visibility=public"
+          if [ $? -ne 0 ]; then
+            echo "project_created=false" >> $GITHUB_ENV
+          else
+            echo "Proyecto ${{ github.event.repository.name }} creado exitosamente en Sonarcloud"
+            echo "Se establece rama main como rama por defecto"
+            curl -X POST -u "${{ secrets.SONAR_TOKEN }}:" "https://sonarcloud.io/api/project_branches/rename" -d "name=main" -d "project=${{ github.event.repository.name }}"
+            echo "project_created=true" >> $GITHUB_ENV
+          fi
+          set -e
       # name: Validate or Create SonarCloud Project
       # id: validate-project
       # env:
@@ -38,7 +52,7 @@ jobs:
       #       "https://sonarcloud.io/api/projects/create" \
       #       -d "name=$REPO_NAME" \
       #       -d "project=$REPO_NAME" \
-      #       -d "organization=devsecopsusach" \
+      #       -d "organization=glemosas" \
       #       -d "visibility=public")
       #     if [ "$create_response" -ne 201 ]; then
       #       echo "¨Proyecto creado exitosamente (HTTP $create_response)."
@@ -65,7 +79,7 @@ jobs:
           echo "Realizando análisis inicial en la rama main..."
           ./gradlew sonarqube \
             -Dsonar.projectKey=$REPO_NAME \
-            -Dsonar.organization=devsecopsusach \
+            -Dsonar.organization=glemosas \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.token=$SONAR_TOKEN \
             -Dsonar.branch.name=main
@@ -79,7 +93,7 @@ jobs:
           echo "Realizando análisis en la rama actual: $BRANCH_NAME..."
           ./gradlew sonarqube \
             -Dsonar.projectKey=$REPO_NAME \
-            -Dsonar.organization=devsecopsusach \
+            -Dsonar.organization=glemosas \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.token=$SONAR_TOKEN \
             -Dsonar.branch.name=${{ github.ref_name }}
