@@ -46,7 +46,7 @@ jobs:
           echo "Respuesta de la API:"
           cat response.json  # Esto imprime el contenido de la respuesta JSON para depuración
 
-          # Verificar si la respuesta contiene componentes
+          # Verificar si el proyecto ya existe en la respuesta
           if [[ "$(echo "$response" | jq -r '.components | length')" -gt 0 ]]; then
             echo "El proyecto ya existe en SonarCloud."
             echo "project_created=false" >> $GITHUB_ENV
@@ -63,10 +63,10 @@ jobs:
             echo "Respuesta de la creación del proyecto:"
             cat create_response.json  # Imprime la respuesta para depuración
 
-            if [[ "$(echo "$create_response" | jq -r '.errors')" != "null" ]]; then
-              echo "Error al crear el proyecto. Respuesta de la API:"
-              cat create_response.json
-              exit 1
+            # Revisar si el proyecto ya existe
+            if echo "$create_response" | jq -e 'select(.errors[]? | .msg | contains("key already exists"))' > /dev/null; then
+              echo "El proyecto ya existe con la misma clave. No se puede crear nuevamente."
+              echo "project_created=false" >> $GITHUB_ENV
             else
               echo "Proyecto ${{ github.event.repository.name }} creado exitosamente en SonarCloud."
               echo "Estableciendo la rama 'main' como la rama predeterminada..."
