@@ -11,7 +11,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           REPO_NAME: pet-clinic
-          ORGANIZATION: glemos-as
+          ORGANIZATION: glemosas
         run: |
           echo "Checking if the project $REPO_NAME exists in SonarCloud..."
           response=$(curl -s -w "%{http_code}" -o response.json -u "$SONAR_TOKEN:" \
@@ -28,7 +28,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           REPO_NAME: pet-clinic
-          ORGANIZATION: glemos-as
+          ORGANIZATION: glemosas
         run: |
           echo "Deleting the project $REPO_NAME in SonarCloud..."
           delete_response=$(curl -s -w "%{http_code}" -o delete_response.json -X POST -u "$SONAR_TOKEN:" \
