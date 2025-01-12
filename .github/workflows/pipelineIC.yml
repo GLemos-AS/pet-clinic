@@ -38,8 +38,9 @@ jobs:
       - name: Validando existencia de proyecto en SonarCloud
         id: validateProjectOnSonar
         run: |
-          # Verificar si el proyecto ya existe
           echo "Verificando si el proyecto existe en SonarCloud..."
+          
+          # Realizar la solicitud a la API para verificar si el proyecto existe
           response=$(curl -s -w "%{http_code}" -o response.json -u "${{ secrets.SONAR_TOKEN }}:" \
             "https://sonarcloud.io/api/projects/search?organization=glemosas&projects=${{ github.event.repository.name }}")
           
@@ -52,33 +53,37 @@ jobs:
             echo "project_created=false" >> $GITHUB_ENV
           else
             echo "El proyecto no existe. Procediendo a crearlo..."
+            
+            # Intentar crear el proyecto
             create_response=$(curl -s -w "%{http_code}" -o create_response.json -X POST -u "${{ secrets.SONAR_TOKEN }}:" \
               "https://sonarcloud.io/api/projects/create" \
               -d "name=${{ github.event.repository.name }}" \
               -d "project=${{ github.event.repository.name }}" \
               -d "organization=glemosas" \
               -d "visibility=public")
-
-            # Verificar la respuesta de creación
+            
+            # Imprimir la respuesta de la creación para depuración
             echo "Respuesta de la creación del proyecto:"
-            cat create_response.json  # Imprime la respuesta para depuración
-
-            # Revisar si el proyecto ya existe
+            cat create_response.json
+            
+            # Verificar si el proyecto ya existe
             if echo "$create_response" | jq -e 'select(.errors[]? | .msg | contains("key already exists"))' > /dev/null; then
               echo "El proyecto ya existe con la misma clave. No se puede crear nuevamente."
               echo "project_created=false" >> $GITHUB_ENV
             else
               echo "Proyecto ${{ github.event.repository.name }} creado exitosamente en SonarCloud."
               echo "Estableciendo la rama 'main' como la rama predeterminada..."
+              
+              # Intentar cambiar la rama predeterminada a 'main'
               branch_response=$(curl -s -w "%{http_code}" -o branch_response.json -X POST -u "${{ secrets.SONAR_TOKEN }}:" \
                 "https://sonarcloud.io/api/project_branches/rename" \
                 -d "name=main" \
                 -d "project=${{ github.event.repository.name }}")
-
-              # Verificar si hubo un error al establecer la rama
+              
               echo "Respuesta al cambiar la rama predeterminada:"
               cat branch_response.json  # Imprime la respuesta para depuración
 
+              # Verificar si hubo un error al establecer la rama predeterminada
               if [[ "$(echo "$branch_response" | jq -r '.errors')" != "null" ]]; then
                 echo "Error al establecer la rama predeterminada. Respuesta de la API:"
                 cat branch_response.json
