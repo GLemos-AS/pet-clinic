@@ -199,13 +199,13 @@ jobs:
       with:
         name: JAR
         path: ${{github.workspace}}
-    # - name: Docker Build
-    #   run: |
-    #     ls -R
-    #     docker build --tag b4b4y4g4x/cursodevsecops-test:latest .
-    # - name: Push Docker
-    #   run: |
-    #     docker push b4b4y4g4x/cursodevsecops-test:latest
+    - name: Docker Build
+      run: |
+        ls -R
+        docker build --tag glemosas/cursodevsecops-test:latest .
+    - name: Push Docker
+      run: |
+        docker push glemosas/cursodevsecops-test:latest
 # DockerScan:
 #   needs: DockerBuild
 #   runs-on: ubuntu-24.04
